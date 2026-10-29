@@ -8,11 +8,13 @@ import {
   NumberInput,
   Paper,
   Portal,
+  Select,
   ScrollArea,
   SegmentedControl,
   Stack,
   Text,
 } from "@mantine/core";
+import { useForm } from "@mantine/form";
 import { useToggle } from "@mantine/hooks";
 import {
   IconArrowsExchange,
@@ -68,6 +70,14 @@ import Board from "./Board";
 import BoardControls from "./BoardControls";
 import EditingCard from "./EditingCard";
 import { OpponentForm, type OpponentSettings } from "./OpponentForm";
+
+interface FormValues {
+  variant: string | null;
+}
+
+const initialValues: FormValues = {
+  variant: "Classical"
+}
 
 function gameResultToOutcome(result: GameResult): Outcome {
   if (result.type === "whiteWins") return "1-0";
@@ -332,15 +342,7 @@ function BoardGame() {
     return `${blackRank}/pppppppp/8/8/8/8/PPPPPPPP/${whiteRank} w ${castling} - 0 1`;
   }
 
-  async function startClassicalGame() {
-    await startGame(true);
-  }
-
-  async function startFreestyleGame() {
-    await startGame(false);
-  }
-
-  async function startGame(isClassical: boolean) {
+  async function startGame(variant: string | null) {
     const playerSettings = getPlayers();
     setPlayers(playerSettings);
 
@@ -353,9 +355,16 @@ function BoardGame() {
     setGameId(newGameId);
 
     const initialMoves = getTreeMoves();
-    const fen = isClassical ? 
-      (root.fen === INITIAL_FEN ? null : root.fen) :
-      get960Fen();
+
+    let fen : string | null = "";
+    switch (variant) {
+      case "Classical":
+        fen = (root.fen === INITIAL_FEN ? null : root.fen);
+        break;
+      case "Freestyle":
+        fen = get960Fen();
+        break;
+    }
 
     const config: GameConfig = {
       white: toPlayerConfig(playerSettings.white),
@@ -657,6 +666,11 @@ function BoardGame() {
     }
   }
 
+  const form = useForm({
+    mode: 'uncontrolled',
+    initialValues: initialValues
+  });
+
   return (
     <>
       <Portal target="#left" style={{ height: "100%" }}>
@@ -800,13 +814,27 @@ function BoardGame() {
 
                   <Divider pb="sm" />
 
-                  <Group grow>
-                    <Button onClick={startClassicalGame} w="50%" variant="light" disabled={error !== null}>
-                      {t("Board.Opponent.StartClassicalGame")}
+                  <Group>
+                    <Button onClick={() => startGame(form.values.variant)} flex="3" variant="light" disabled={error !== null}>
+                      {t("Board.Opponent.StartGame")}
                     </Button>
-                    <Button onClick={startFreestyleGame} w="50%" variant="light" disabled={error !== null}>
-                      {t("Board.Opponent.StartFreestyleGame")}
-                    </Button>
+                    <Select
+                      allowDeselect={false}
+                      comboboxProps={{
+                        position: "bottom",
+                        middlewares: { flip: false, shift: false },
+                      }}
+                      data={[
+                        { label: t("Board.Variants.Classical"), value: "Classical"},
+                        { label: t("Board.Variants.Freestyle"), value: "Freestyle"},
+                      ]}
+                      value={form.values.variant}
+                      onChange={(v) => {
+                        if (v === form.values.variant) return;
+                        form.setFieldValue("variant", v);
+                      }}
+                      flex="1"
+                    />
                   </Group>
                 </Stack>
               )}
