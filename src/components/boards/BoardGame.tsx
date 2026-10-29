@@ -282,7 +282,65 @@ function BoardGame() {
     return moves;
   }
 
-  async function startGame() {
+  function get960Fen(id = Math.floor(Math.random() * 960)): string {
+    if (!Number.isInteger(id) || id < 0 || id > 959) {
+      throw new RangeError("Chess960 position ID must be an integer from 0 to 959.");
+    }
+
+    let n = id;
+    const backRank: string[] = Array(8).fill("");
+
+    // Place bishops on opposite-colored squares.
+    backRank[(n % 4) * 2 + 1] = "B";
+    n = Math.floor(n / 4);
+    backRank[(n % 4) * 2] = "B";
+    n = Math.floor(n / 4);
+
+    // Place the queen on one of the six remaining squares.
+    let empty = backRank.flatMap((piece, file) => piece ? [] : [file]);
+    backRank[empty[n % 6]] = "Q";
+    n = Math.floor(n / 6);
+
+    // Place knights using Scharnagl's ten possible pairs.
+    const knightPairs: [number, number][] = [
+      [0, 1], [0, 2], [0, 3], [0, 4], [1, 2],
+      [1, 3], [1, 4], [2, 3], [2, 4], [3, 4],
+    ];
+    empty = backRank.flatMap((piece, file) => piece ? [] : [file]);
+    const [a, b] = knightPairs[n];
+    backRank[empty[a]] = "N";
+    backRank[empty[b]] = "N";
+
+    // The last three squares are rook, king, rook.
+    empty = backRank.flatMap((piece, file) => piece ? [] : [file]);
+    backRank[empty[0]] = "R";
+    backRank[empty[1]] = "K";
+    backRank[empty[2]] = "R";
+
+    const whiteRank = backRank.join("");
+    const blackRank = whiteRank.toLowerCase();
+
+    // Shredder-FEN castling rights: rook-file letters, kingside rook first.
+    const rookFiles = backRank
+      .flatMap((piece, file) => piece === "R" ? [file] : [])
+      .sort((x, y) => y - x);
+    const castling = rookFiles
+      .map(file => String.fromCharCode(65 + file))
+      .join("") +
+      rookFiles.map(file => String.fromCharCode(97 + file)).join("");
+
+    return `${blackRank}/pppppppp/8/8/8/8/PPPPPPPP/${whiteRank} w ${castling} - 0 1`;
+  }
+
+  async function startClassicalGame() {
+    await startGame(true);
+  }
+
+  async function startFreestyleGame() {
+    await startGame(false);
+  }
+
+  async function startGame(isClassical: boolean) {
     const playerSettings = getPlayers();
     setPlayers(playerSettings);
 
@@ -295,6 +353,9 @@ function BoardGame() {
     setGameId(newGameId);
 
     const initialMoves = getTreeMoves();
+    const fen = isClassical ? 
+      (root.fen === INITIAL_FEN ? null : root.fen) :
+      get960Fen();
 
     const config: GameConfig = {
       white: toPlayerConfig(playerSettings.white),
@@ -311,7 +372,8 @@ function BoardGame() {
             increment: playerSettings.black.timeControl.increment ?? 0,
           }
         : null,
-      initialFen: root.fen === INITIAL_FEN ? null : root.fen,
+      // initialFen: root.fen === INITIAL_FEN ? null : root.fen,
+      initialFen: fen,
       initialMoves,
       openingBook:
         openingBookEnabled && openingBookPath
@@ -737,9 +799,15 @@ function BoardGame() {
                   </ScrollArea>
 
                   <Divider pb="sm" />
-                  <Button onClick={startGame} fullWidth variant="light" disabled={error !== null}>
-                    {t("Board.Opponent.StartGame")}
-                  </Button>
+
+                  <Group grow>
+                    <Button onClick={startClassicalGame} w="50%" variant="light" disabled={error !== null}>
+                      {t("Board.Opponent.StartClassicalGame")}
+                    </Button>
+                    <Button onClick={startFreestyleGame} w="50%" variant="light" disabled={error !== null}>
+                      {t("Board.Opponent.StartFreestyleGame")}
+                    </Button>
+                  </Group>
                 </Stack>
               )}
               {(gameState === "playing" || gameState === "gameOver") && (
